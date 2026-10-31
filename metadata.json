@@ -1,0 +1,8 @@
+{
+  "name": "Aura Agenda Smart",
+  "description": "Agenda super intelligente pulita e minimalista collegata a Google Calendar, Meet, Tasks, Notion, Obsidian e Zapier per automatizzare le tue giornate.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

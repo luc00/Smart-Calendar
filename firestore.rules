@@ -1,0 +1,145 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Connection testing endpoint
+    match /test/{docId} {
+      allow read: if isSignedIn();
+    }
+
+    // User Profile
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.email is string && data.email.size() <= 256 &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 128)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1024)) &&
+             (!('defaultMeetEnabled' in data) || data.defaultMeetEnabled is bool) &&
+             (!('obsidianVaultName' in data) || (data.obsidianVaultName is string && data.obsidianVaultName.size() <= 128)) &&
+             (!('zapierWebhookUrl' in data) || (data.zapierWebhookUrl is string && data.zapierWebhookUrl.size() <= 1024)) &&
+             (!('notionDatabaseId' in data) || (data.notionDatabaseId is string && data.notionDatabaseId.size() <= 128));
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUserProfile(incoming());
+      allow update: if isOwner(userId) && isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId;
+      allow delete: if isOwner(userId);
+
+      // Subcollection: Events
+      function isValidAgendaEvent(data) {
+        return data.id is string && data.id.size() <= 128 &&
+               data.userId is string && data.userId == request.auth.uid &&
+               data.title is string && data.title.size() >= 1 && data.title.size() <= 256 &&
+               data.startTime is string && data.startTime.size() <= 64 &&
+               data.endTime is string && data.endTime.size() <= 64 &&
+               (!('description' in data) || (data.description is string && data.description.size() <= 2048)) &&
+               (!('category' in data) || (data.category is string && data.category.size() <= 64)) &&
+               (!('meetLink' in data) || (data.meetLink is string && data.meetLink.size() <= 512)) &&
+               (!('status' in data) || (data.status in ['scheduled', 'completed', 'cancelled'])) &&
+               (!('isGoogleCalendar' in data) || data.isGoogleCalendar is bool) &&
+               (!('zapierTriggered' in data) || data.zapierTriggered is bool);
+      }
+
+      match /events/{eventId} {
+        allow get: if isOwner(userId) && isValidId(eventId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(eventId) && isValidAgendaEvent(incoming()) && incoming().id == eventId;
+        allow update: if isOwner(userId) && isValidId(eventId) && isValidAgendaEvent(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().id == existing().id;
+        allow delete: if isOwner(userId) && isValidId(eventId);
+      }
+
+      // Subcollection: Tasks
+      function isValidAgendaTask(data) {
+        return data.id is string && data.id.size() <= 128 &&
+               data.userId is string && data.userId == request.auth.uid &&
+               data.title is string && data.title.size() >= 1 && data.title.size() <= 256 &&
+               (!('notes' in data) || (data.notes is string && data.notes.size() <= 2048)) &&
+               (!('priority' in data) || (data.priority in ['urgent', 'high', 'medium', 'low'])) &&
+               (!('dueDate' in data) || (data.dueDate is string && data.dueDate.size() <= 64)) &&
+               (!('completed' in data) || data.completed is bool) &&
+               (!('category' in data) || (data.category is string && data.category.size() <= 64)) &&
+               (!('notionSynced' in data) || data.notionSynced is bool) &&
+               (!('zapierTriggered' in data) || data.zapierTriggered is bool);
+      }
+
+      match /tasks/{taskId} {
+        allow get: if isOwner(userId) && isValidId(taskId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(taskId) && isValidAgendaTask(incoming()) && incoming().id == taskId;
+        allow update: if isOwner(userId) && isValidId(taskId) && isValidAgendaTask(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().id == existing().id;
+        allow delete: if isOwner(userId) && isValidId(taskId);
+      }
+
+      // Subcollection: Quick Memos
+      function isValidQuickMemo(data) {
+        return data.id is string && data.id.size() <= 128 &&
+               data.userId is string && data.userId == request.auth.uid &&
+               data.content is string && data.content.size() <= 5000 &&
+               (!('title' in data) || (data.title is string && data.title.size() <= 256)) &&
+               (!('pinned' in data) || data.pinned is bool) &&
+               (!('color' in data) || (data.color is string && data.color.size() <= 32));
+      }
+
+      match /memos/{memoId} {
+        allow get: if isOwner(userId) && isValidId(memoId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(memoId) && isValidQuickMemo(incoming()) && incoming().id == memoId;
+        allow update: if isOwner(userId) && isValidId(memoId) && isValidQuickMemo(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().id == existing().id;
+        allow delete: if isOwner(userId) && isValidId(memoId);
+      }
+
+      // Subcollection: Sync Logs
+      function isValidSyncLog(data) {
+        return data.id is string && data.id.size() <= 128 &&
+               data.userId is string && data.userId == request.auth.uid &&
+               data.service in ['zapier', 'obsidian', 'notion', 'google_meet', 'google_calendar', 'google_tasks'] &&
+               data.action is string && data.action.size() <= 128 &&
+               data.status in ['success', 'failed', 'pending'] &&
+               (!('payloadSummary' in data) || (data.payloadSummary is string && data.payloadSummary.size() <= 1024));
+      }
+
+      match /syncLogs/{logId} {
+        allow get: if isOwner(userId) && isValidId(logId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(logId) && isValidSyncLog(incoming()) && incoming().id == logId;
+        allow update: if isOwner(userId) && isValidId(logId) && isValidSyncLog(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().id == existing().id;
+        allow delete: if isOwner(userId) && isValidId(logId);
+      }
+    }
+  }
+}
