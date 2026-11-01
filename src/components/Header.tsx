@@ -34,9 +34,9 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
             <img
-              src="/assets/aistudio/image_564199be.png"
-              alt="Aura"
-              className="h-5 w-auto object-contain select-none"
+              src="/assets/aistudio/9963002-calendario-icona-logo-vettore-gratuito-vettoriale-removebg-preview_631aa60c.png"
+              alt="Agenda"
+              className="h-8 w-8 object-contain select-none"
               loading="eager"
             />
             <span className="text-xs text-neutral-400 capitalize hidden sm:inline">
